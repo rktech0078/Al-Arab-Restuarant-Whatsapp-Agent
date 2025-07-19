@@ -1,0 +1,8 @@
+openai
+requests
+python-dotenv
+gspread
+google-auth
+sqlalchemy
+psycopg2-binary
+Flask 
