@@ -49,7 +49,7 @@ def keep_alive():
     while True:
         try:
             print("Pinging self to stay awake...")
-            requests.get("https://whatsapp-cloud-api-success.onrender.com/ping")
+            requests.get("https://al-arab-restuarant-whatsapp-agent.onrender.com/ping")
         except Exception as e:
             print("Keep-alive ping failed:", e)
         time.sleep(600)
