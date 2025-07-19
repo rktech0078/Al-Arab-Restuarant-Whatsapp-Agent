@@ -21,13 +21,7 @@ if not WHATSAPP_CLOUD_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
 def send_whatsapp_message(to, message):
     print(f"[DEBUG] (send_whatsapp_message) Using Token: {WHATSAPP_CLOUD_TOKEN}")
     print(f"[DEBUG] (send_whatsapp_message) Using Phone Number ID: {WHATSAPP_PHONE_NUMBER_ID}")
-    # Step 1: Send Typing Indicator
-    send_whatsapp_typing(to)
-    
-    # Step 2: Simulate typing delay
-    time.sleep(1)
-
-    # Step 3: Send Actual Message
+    # Step 1: Send Actual Message (typing indicator removed)
     url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_CLOUD_TOKEN}",
@@ -52,32 +46,3 @@ def send_whatsapp_message(to, message):
             print(f"WhatsApp Cloud API error: {response.status_code} {response.text}")
     except Exception as e:
         print(f"WhatsApp Cloud API exception: {e}")
-
-
-def send_whatsapp_typing(to):
-    print(f"[DEBUG] (send_whatsapp_typing) Using Token: {WHATSAPP_CLOUD_TOKEN}")
-    print(f"[DEBUG] (send_whatsapp_typing) Using Phone Number ID: {WHATSAPP_PHONE_NUMBER_ID}")
-    url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_CLOUD_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "messaging_product": "whatsapp",
-        "to": to,
-        "type": "action",
-        "action": {"typing": "true"}
-    }
-    print(f"[DEBUG] Sending WhatsApp typing indicator to: {to}")
-    print(f"[DEBUG] (send_whatsapp_typing) URL: {url}")
-    print(f"[DEBUG] (send_whatsapp_typing) Headers: {headers}")
-    print(f"[DEBUG] (send_whatsapp_typing) Data: {data}")
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        print(f"[DEBUG] WhatsApp API typing response: {response.status_code} | {response.text}")
-        if response.status_code == 200:
-            print(f"[CLOUD TYPING] To: {to} | Typing indicator sent")
-        else:
-            print(f"WhatsApp Cloud API typing error: {response.status_code} {response.text}")
-    except Exception as e:
-        print(f"WhatsApp Cloud API typing exception: {e}")

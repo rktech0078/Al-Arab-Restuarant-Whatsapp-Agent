@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from whatsapp.send_message import send_whatsapp_message, send_whatsapp_typing
+from whatsapp.send_message import send_whatsapp_message
 from sheets.google_sheets import append_order_to_sheet, update_order_status_in_sheet
 from db.models import Order, SessionLocal, Conversation
 from receipts.receipt_generator import generate_receipt
@@ -241,8 +241,6 @@ def handle_incoming_message(data):
             if any(word in text.lower() for word in ['order', 'menu', 'biryani', 'burger', 'shawarma', 'khaana', 'khana', 'dish', 'item', 'pizza', 'rice', 'pulao']):
                 session['step'] = 'order_interest'
             else:
-                send_whatsapp_typing(from_number)
-                time.sleep(1.5)
                 ai_response = get_ai_reply(text, from_number, state='greeting')
                 print(f"[DEBUG] AI reply (greeting): {ai_response}")
                 send_whatsapp_message(from_number, ai_response or 'Sorry, I am unable to reply right now.')
@@ -252,8 +250,6 @@ def handle_incoming_message(data):
             if any(word in text.lower() for word in ['haan', 'yes', 'ok', 'theek', 'chalo', 'kar do', 'place', 'confirm']):
                 session['step'] = 'collecting_details'
             else:
-                send_whatsapp_typing(from_number)
-                time.sleep(1.5)
                 ai_response = get_ai_reply(text, from_number, state='order_interest')
                 print(f"[DEBUG] AI reply (order_interest): {ai_response}")
                 send_whatsapp_message(from_number, ai_response or 'Sorry, I am unable to reply right now.')
@@ -378,8 +374,6 @@ def handle_incoming_message(data):
                 'items': 'Aap kya order karna chahenge? (item aur quantity likhein) 🍽️',
             }
             if required_missing:
-                send_whatsapp_typing(from_number)
-                time.sleep(1.5)
                 ai_response = get_ai_reply(text, from_number, state='collecting_details')
                 print(f"[DEBUG] AI reply (collecting_details): {ai_response}")
                 send_whatsapp_message(from_number, prompts[required_missing[0]])
