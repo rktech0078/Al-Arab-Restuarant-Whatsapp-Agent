@@ -1,12 +1,12 @@
 import os
 import json
 import re
-from whatsapp.send_message import send_whatsapp_message
+from whatsapp.send_message import send_whatsapp_message, send_whatsapp_document
 from sheets.google_sheets import append_order_to_sheet, update_order_status_in_sheet
 from db.models import Order, SessionLocal, Conversation
 from receipts.receipt_generator import generate_receipt
 import openai
-from openai_agent.ai_reply import get_ai_reply
+from openai_agent.ai_reply import get_ai_reply, is_order_confirmation
 import time
 
 user_histories = {}
@@ -176,8 +176,47 @@ def handle_incoming_message(data):
             return
         msg = messages[0]
         from_number = msg['from']
-        text = msg['text']['body'].strip()
+        # Location message handle
+        if msg.get('type') == 'location' and 'location' in msg:
+            loc = msg['location']
+            address = loc.get('address', '')
+            name = loc.get('name', '')
+            full_address = f"{address} {name}".strip()
+            print(f"[DEBUG] Location received from {from_number}: {full_address}")
+            # Save to session
+            session = user_sessions.get(from_number, {'name': None, 'address': None, 'phone': None, 'items': None, 'payment_type': None, 'step': 'collecting_details'})
+            session['address'] = full_address
+            user_sessions[from_number] = session
+            send_whatsapp_message(from_number, f"Location mil gayi! Address: {full_address}")
+            # Continue normal flow (try to extract other fields, etc.)
+            # You may want to trigger the next step here if needed
+            # For now, just return to avoid double-processing
+            return
+        text = msg['text']['body'].strip() if msg.get('type') == 'text' else ''
         print(f"[DEBUG] Incoming message from {from_number}: {text}")
+
+        # --- MENU PDF SEND LOGIC (moved to top, before state machine) ---
+        menu_keywords = ['menu', 'menu bhejein', 'menu send', 'menu chahiye', 'menu chahta hoon', 'menu please', 'menu pdf']
+        if any(word in text.lower() for word in menu_keywords):
+            print(f"[DEBUG] Menu keyword detected in message: {text}")
+            menu_pdf_path = 'menu.pdf' if os.path.exists('menu.pdf') else os.path.join('whatsapp', 'menu.pdf')
+            pdf_sent = False
+            if os.path.exists(menu_pdf_path):
+                try:
+                    send_whatsapp_message(from_number, 'Yeh raha hamara menu! (PDF attached)')
+                    pdf_sent = send_whatsapp_document(from_number, menu_pdf_path, caption='Al Arab Restaurant Menu')
+                    print(f"[DEBUG] PDF send attempted, success: {pdf_sent}")
+                except Exception as e:
+                    print('[DEBUG] Menu PDF send error:', e)
+                    pdf_sent = False
+            if not pdf_sent:
+                send_whatsapp_message(from_number, 'Maaf kijiye, menu PDF abhi available nahi hai. Text menu bhej raha hoon.')
+                # Only send text menu if PDF failed
+                menu_highlights = (
+                    "Menu highlights: Chicken Shawarma (Rs. 490), Lebanese Shawarma (Rs. 500), Chicken Crispy Shawarma (Rs. 530), Chicken Cheese Shawarma (Rs. 530), Fish Shawarma (Rs. 590), Beef Shawarma (Rs. 460), Beef Cheese Shawarma (Rs. 540), Falafel Platter (Rs. 980/650), Falafel Roll (Rs. 250), Chicken Hummus Platter (Rs. 1,999), Beef Hummus Platter (Rs. 1,800), Zinger Burger (Rs. 500), Broast Chest (Rs. 550), Chicken Biryani (Rs. 250/450), Sweet Corn (Rs. 250), Cheezi Potatoes (Rs. 350), 6 Flavour Fries (Rs. 290), Chicken Fried Rice (Rs. 500), Chicken Manchurian with Rice (Rs. 800), Pasta/Lasagna specials.\nDeals: Pizza combos, Super Deal Rs. 500, Eid/Ramadan specials, daily combos.\nTimings: Rozana 12:00pm se 3:15am tak.\nAddress: Gulistan-e-Johar, Block 15, Decent Towers, Continental Bakery ke qareeb. Dusra outlet: Alamgir Road, B.M. Society, Sharafabad.\nDelivery, takeaway, dine-in available.\nContact: 0300-2581719, 0345-3383881, 0333-7857596, 0314-9760610."
+                )
+                send_whatsapp_message(from_number, menu_highlights)
+            return
         # Cancel/Prank detection
         if text.lower() in ['cancel', 'galat', 'غلط', 'کینسل']:
             db = SessionLocal()
@@ -369,7 +408,7 @@ def handle_incoming_message(data):
             # If any required field missing, ask only that one (in loving style)
             prompts = {
                 'name': 'Aapka naam share kar dein, taki order confirm ho sake! 😊',
-                'address': 'Delivery address share kar dein, taki hamari team aapko asaani se dhoond sake! 🏠',
+                'address': 'Delivery address likh dein ya WhatsApp ka location button use kar ke apni location share kar dein! 🏠📍',
                 'phone': 'Aapka contact number mil sakta hai, taki rider aap se raabta kar sake? 📞',
                 'items': 'Aap kya order karna chahenge? (item aur quantity likhein) 🍽️',
             }
@@ -387,7 +426,12 @@ def handle_incoming_message(data):
             return
         # Confirmation step: wait for user to reply 'confirm'
         if session.get('step') == 'confirming_order':
-            if text.lower() in ['confirm', 'haan', 'ok', 'theek', 'yes']:
+            try:
+                confirmed = is_order_confirmation(text)
+            except Exception as e:
+                print('[DEBUG] LLM confirmation error:', e)
+                confirmed = False
+            if confirmed:
                 print(f"[DEBUG] Attempting to save order: {session}")
                 try:
                     row = [
@@ -434,7 +478,7 @@ def handle_incoming_message(data):
                 # Clear session after order
                 user_sessions.pop(from_number, None)
             else:
-                send_whatsapp_message(from_number, "Agar sab theek hai to 'confirm' likhein, warna jo galat hai woh batayein.")
+                send_whatsapp_message(from_number, "Agar sab theek hai to 'confirm' ya koi bhi positive jawab dein (jaise 'haan', 'ok', 'theek hai', 'yes', etc.), warna jo galat hai woh batayein.")
             return
         else:
             user_sessions[from_number] = session
